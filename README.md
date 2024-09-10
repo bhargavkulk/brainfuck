@@ -1,1 +1,3 @@
-# brainfuck
+# brainfuck.c
+
+Brainfuck implemented in C
