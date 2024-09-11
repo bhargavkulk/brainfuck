@@ -18,18 +18,8 @@ Vector instructions;
 Stack stack;
 int s_ptr = -1;
 
-void print_stack() {
-    for (int i = 0; i < s_ptr; i++) {
-        printf("Stack %d ", stack.array[i]);
-    }
-    printf("\n");
-}
-
 int dis_bf() {
-    // printf("%zu %zu\n", instructions.count, instructions.capacity);
     for (int i = 0; i < instructions.count;) {
-        // getchar();
-        // printf("%zu %d\n", i, instructions.array[i]);
         switch (instructions.array[i]) {
         case LEFT:
             printf("%d >\n", i);
@@ -72,7 +62,6 @@ int compile_bf(FILE *fp) {
     char c;
     int target;
     while ((c = getc(fp)) != EOF) {
-        // dis_bf();
         switch (c) {
         case '>':
             vector_append(&instructions, LEFT);
@@ -102,16 +91,10 @@ int compile_bf(FILE *fp) {
             vector_append(&instructions, J_FWD);
             vector_append(&instructions, 0);
             stack_push(&stack, &s_ptr, i_ptr);
-            // dis_bf();
-            // print_stack();
-            // getchar();
             i_ptr += 2;
             break;
         case ']':
             target = stack_pop(&stack, &s_ptr);
-            // dis_bf();
-            // print_stack();
-            // getchar();
             vector_append(&instructions, J_BACK);
             vector_append(&instructions, target);
             instructions.array[target + 1] = i_ptr;
