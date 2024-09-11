@@ -39,7 +39,7 @@ void vector_free(Vector *vector) { free(vector->array); }
 
 // *s_ptr starts at -1!!!!
 void stack_push(Stack *vector, int *s_ptr, int number) {
-    if(*s_ptr == vector->count - 1) {
+    if (*s_ptr == vector->count - 1) {
         vector_append(vector, number);
         *s_ptr += 1;
     } else {

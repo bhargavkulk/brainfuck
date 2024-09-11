@@ -3,24 +3,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-enum Instruction { INC, DEC, LEFT, RIGHT, J_FWD, J_BACK, IN, OUT };
+enum Instruction {
+    LEFT,
+    RIGHT,
+    INC,
+    DEC,
+    OUT,
+    IN,
+    J_FWD,
+    J_BACK,
+};
 
 Vector instructions;
 Stack stack;
 int s_ptr = -1;
 
 void print_stack() {
-    for(int i = 0; i < s_ptr; i++) {
+    for (int i = 0; i < s_ptr; i++) {
         printf("Stack %d ", stack.array[i]);
     }
     printf("\n");
 }
 
 int dis_bf() {
-    //printf("%zu %zu\n", instructions.count, instructions.capacity);
+    // printf("%zu %zu\n", instructions.count, instructions.capacity);
     for (int i = 0; i < instructions.count;) {
-        //getchar();
-        //printf("%zu %d\n", i, instructions.array[i]);
+        // getchar();
+        // printf("%zu %d\n", i, instructions.array[i]);
         switch (instructions.array[i]) {
         case LEFT:
             printf("%d >\n", i);
@@ -63,7 +72,7 @@ int compile_bf(FILE *fp) {
     char c;
     int target;
     while ((c = getc(fp)) != EOF) {
-        //dis_bf();
+        // dis_bf();
         switch (c) {
         case '>':
             vector_append(&instructions, LEFT);
@@ -93,16 +102,16 @@ int compile_bf(FILE *fp) {
             vector_append(&instructions, J_FWD);
             vector_append(&instructions, 0);
             stack_push(&stack, &s_ptr, i_ptr);
-            //dis_bf();
-            //print_stack();
-            //getchar();
+            // dis_bf();
+            // print_stack();
+            // getchar();
             i_ptr += 2;
             break;
         case ']':
             target = stack_pop(&stack, &s_ptr);
-            //dis_bf();
-            //print_stack();
-            //getchar();
+            // dis_bf();
+            // print_stack();
+            // getchar();
             vector_append(&instructions, J_BACK);
             vector_append(&instructions, target);
             instructions.array[target + 1] = i_ptr;
@@ -153,6 +162,49 @@ void interpret_bf() {
     }
 }
 
+void interpret_bf_threaded() {
+    static void *dispatch_table[] = {&&do_left, &&do_right, &&do_inc,
+                                     &&do_dec,  &&do_out,   &&do_in,
+                                     &&do_fwd,  &&do_back};
+#define DISPATCH() goto *dispatch_table[instructions.array[i_ptr]]
+    int i_ptr = 0;
+    int t_ptr = 8192 / 2;
+    int *tape = (int *)calloc(8192, sizeof(int));
+    DISPATCH();
+    while (i_ptr < instructions.count) {
+    do_left:
+        t_ptr++;
+        i_ptr++;
+        DISPATCH();
+    do_right:
+        t_ptr--;
+        i_ptr++;
+        DISPATCH();
+    do_inc:
+        tape[t_ptr]++;
+        i_ptr++;
+        DISPATCH();
+    do_dec:
+        tape[t_ptr]--;
+        i_ptr++;
+        DISPATCH();
+    do_out:
+        putchar(tape[t_ptr]);
+        i_ptr++;
+        DISPATCH();
+    do_in:
+        tape[t_ptr] = getchar();
+        i_ptr++;
+        DISPATCH();
+    do_fwd:
+        i_ptr = tape[t_ptr] ? i_ptr + 2 : instructions.array[i_ptr + 1];
+        DISPATCH();
+    do_back:
+        i_ptr = tape[t_ptr] ? instructions.array[i_ptr + 1] : i_ptr + 2;
+        DISPATCH();
+    }
+}
+
 int main(int argc, char *argv[]) {
     vector_init(&instructions);
     vector_init(&stack);
@@ -169,7 +221,7 @@ int main(int argc, char *argv[]) {
     }
 
     ret = compile_bf(fp);
-    interpret_bf();
+    interpret_bf_threaded();
 
     vector_free(&instructions);
     vector_free(&stack);
