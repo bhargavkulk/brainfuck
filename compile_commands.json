@@ -1,19 +1,18 @@
 [
   {
     "arguments": [
-      "/usr/bin/clang++",
+      "/usr/bin/clang",
       "-Wall",
       "-Wextra",
       "-Iinclude",
-      "-std=c++11",
       "-O3",
       "-c",
       "-o",
       "build/main.o",
-      "src/main.cc"
+      "src/main.c"
     ],
     "directory": "/Users/bhargavkk/Projects/brainfuck",
-    "file": "/Users/bhargavkk/Projects/brainfuck/src/main.cc",
+    "file": "/Users/bhargavkk/Projects/brainfuck/src/main.c",
     "output": "/Users/bhargavkk/Projects/brainfuck/build/main.o"
   }
 ]
