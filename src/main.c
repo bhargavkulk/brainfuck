@@ -136,8 +136,7 @@ void dis_bf() {
 int compile_bf(FILE *fp) {
     int i_ptr = 0;
     char c;
-    int target, operand;
-    int match_mult = 0;
+    int target, operand, offset;
     while ((c = getc(fp)) != EOF) {
         switch (c) {
         case '>':
@@ -249,8 +248,8 @@ int compile_bf(FILE *fp) {
                 vector_insert(&offsets, i_ptr - 2, 0);
                 i_ptr--;
             } else if (match_multiply()) {
-                match_mult++;
                 operand = OPERAND_FROM_END(3);
+                offset = OPERAND_FROM_END(2);
                 vector_pop(&instructions);
                 vector_pop(&instructions);
                 vector_pop(&instructions);
@@ -269,7 +268,7 @@ int compile_bf(FILE *fp) {
                 i_ptr -= 5;
                 vector_insert(&instructions, i_ptr, MEM_MOVE);
                 vector_insert(&operands, i_ptr, operand);
-                vector_insert(&offsets, i_ptr, 0);
+                vector_insert(&offsets, i_ptr, offset);
                 i_ptr++;
             } else {
                 vector_insert(&instructions, i_ptr, J_BACK);
@@ -284,8 +283,6 @@ int compile_bf(FILE *fp) {
     vector_append(&instructions, HALT);
     vector_append(&operands, 0);
     vector_append(&offsets, 0);
-
-    printf("match mult == %d\n", match_mult);
 
     return 0;
 }
@@ -353,7 +350,7 @@ void interpret_bf_threaded() {
     do_mem_move:
         if (tape[t_ptr]) {
             int move_to_ptr = t_ptr + operands.array[i_ptr];
-            tape[move_to_ptr] += tape[t_ptr];
+            tape[move_to_ptr] += tape[t_ptr] * offsets.array[i_ptr];
             tape[t_ptr] = 0;
         }
         i_ptr++;
@@ -383,7 +380,7 @@ int main(int argc, char *argv[]) {
     compile_bf(fp);
     // dis_bf();
 
-    // interpret_bf_threaded();
+    interpret_bf_threaded();
 
     vector_free(&instructions);
     vector_free(&operands);

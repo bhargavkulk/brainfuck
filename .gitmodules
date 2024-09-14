@@ -1,0 +1,3 @@
+[submodule "bfbenchmarks"]
+	path = bfbenchmarks
+	url = https://github.com/cwfitzgerald/brainfuck-benchmark.git
