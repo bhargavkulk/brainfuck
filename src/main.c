@@ -1,32 +1,100 @@
 #include "data.h"
 #include "util.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 enum Instruction {
-    LEFT,
-    RIGHT,
-    INC,
-    DEC,
-    OUT,
-    IN,
-    J_FWD,
-    J_BACK,
+    MOVE,      // 1 operand
+    ADD,       // 2 operand
+    OUT,       // No operands
+    IN,        // No operands
+    J_FWD,     // 1 operand
+    J_BACK,    // 1 operand
+    HALT,      // No operands
+    SET,       // 1 operand
+    MOVE_TO_0, // 1 operand
+    MEM_MOVE,  // 1 operand
 };
 
 Vector instructions;
+Vector operands;
+Vector offsets;
+
+#define INSTR_FROM_END(index) instructions.array[instructions.count - (index)]
+#define OPERAND_FROM_END(index) operands.array[operands.count - (index)]
+#define OFFSET_FROM_END(index) offsets.array[offsets.count - (index)]
+
+#define IS_LAST_INSTR(instr)                                                   \
+    ((instructions.count != 0) && (vector_last(&instructions) == (instr)))
+
+//- Instruction Matching -------------------------------------------------------
+bool match_set() {
+    //[-]
+    if (instructions.count >= 2) {
+        int instr1 = INSTR_FROM_END(2);
+        int instr2 = INSTR_FROM_END(1);
+        int op2 = OPERAND_FROM_END(1);
+        return instr1 == J_FWD && instr2 == ADD && (op2 == 1 || op2 == -1);
+    } else {
+        return false;
+    }
+}
+
+bool match_move_to_zero() {
+    //[>]
+    if (instructions.count >= 2) {
+        int instr1 = INSTR_FROM_END(2);
+        int instr2 = INSTR_FROM_END(1);
+        return instr1 == J_FWD && instr2 == MOVE;
+    } else {
+        return false;
+    }
+}
+
+bool match_multiply() {
+    //[->+< ]
+    if (instructions.count >= 5) {
+        // [
+        int instr1 = INSTR_FROM_END(5);
+
+        // -
+        int instr2 = INSTR_FROM_END(4);
+        int op2 = OPERAND_FROM_END(4);
+
+        // >
+        int instr3 = INSTR_FROM_END(3);
+        int op3 = OPERAND_FROM_END(3);
+
+        // +
+        int instr4 = INSTR_FROM_END(2);
+        int op4 = OPERAND_FROM_END(2);
+
+        // <
+        int instr5 = INSTR_FROM_END(1);
+        int op5 = OPERAND_FROM_END(1);
+
+        return instr1 == J_FWD && instr2 == ADD && instr3 == MOVE &&
+               instr4 == ADD && instr5 == MOVE && op2 == -1 && op3 + op5 == 0 &&
+               op4 > 0;
+
+    } else {
+        return false;
+    }
+}
+
 Stack stack;
 int s_ptr = -1;
 
-int dis_bf() {
+void dis_bf() {
     for (int i = 0; i < instructions.count;) {
         switch (instructions.array[i]) {
-        case LEFT:
-            printf("%d >\n", i);
+        case MOVE:
+            printf("%d > %d\n", i, operands.array[i]);
             i++;
             break;
-        case RIGHT:
-            printf("%d <\n", i);
+        case SET:
+            printf("%d SET %d\n", i, operands.array[i]);
             i++;
             break;
         case OUT:
@@ -37,21 +105,29 @@ int dis_bf() {
             printf("%d ,\n", i);
             i++;
             break;
-        case INC:
-            printf("%d +\n", i);
-            i++;
-            break;
-        case DEC:
-            printf("%d -\n", i);
+        case ADD:
+            printf("%d + %d %d\n", i, operands.array[i], offsets.array[i]);
             i++;
             break;
         case J_FWD:
-            printf("%d [ %d\n", i, instructions.array[i + 1]);
-            i += 2;
+            printf("%d [ %d\n", i, operands.array[i]);
+            i++;
             break;
         case J_BACK:
-            printf("%d ] %d\n", i, instructions.array[i + 1]);
-            i += 2;
+            printf("%d ] %d\n", i, operands.array[i]);
+            i++;
+            break;
+        case MOVE_TO_0:
+            printf("%d >0 %d\n", i, operands.array[i]);
+            i++;
+            break;
+        case HALT:
+            printf("%d HALT\n", i);
+            i++;
+            break;
+        case MEM_MOVE:
+            printf("%d >! %d\n", i, operands.array[i]);
+            i++;
             break;
         }
     }
@@ -60,138 +136,239 @@ int dis_bf() {
 int compile_bf(FILE *fp) {
     int i_ptr = 0;
     char c;
-    int target;
+    int target, operand;
+    int match_mult = 0;
     while ((c = getc(fp)) != EOF) {
         switch (c) {
         case '>':
-            vector_append(&instructions, LEFT);
-            i_ptr++;
+            if (IS_LAST_INSTR(MOVE)) {
+                operands.array[i_ptr - 1] += 1;
+                if (operands.array[i_ptr - 1] == 0) {
+                    vector_pop(&instructions);
+                    vector_pop(&operands);
+                    vector_pop(&offsets);
+                    i_ptr--;
+                }
+            } else {
+                vector_insert(&instructions, i_ptr, MOVE);
+                vector_insert(&operands, i_ptr, 1);
+                vector_insert(&offsets, i_ptr, 0);
+                i_ptr++;
+            }
             break;
         case '<':
-            vector_append(&instructions, RIGHT);
-            i_ptr++;
+            if (IS_LAST_INSTR(MOVE)) {
+                operands.array[i_ptr - 1] -= 1;
+                if (operands.array[i_ptr - 1] == 0) {
+                    vector_pop(&instructions);
+                    vector_pop(&operands);
+                    vector_pop(&offsets);
+                    i_ptr--;
+                }
+            } else {
+                vector_insert(&instructions, i_ptr, MOVE);
+                vector_insert(&operands, i_ptr, -1);
+                vector_insert(&offsets, i_ptr, 0);
+                i_ptr++;
+            }
             break;
         case '+':
-            vector_append(&instructions, INC);
-            i_ptr++;
+            if (IS_LAST_INSTR(ADD)) {
+                operands.array[i_ptr - 1] += 1;
+                if (operands.array[i_ptr - 1] == 0) {
+                    vector_pop(&instructions);
+                    vector_pop(&operands);
+                    vector_pop(&offsets);
+                    i_ptr--;
+                }
+            } else {
+                vector_insert(&instructions, i_ptr, ADD);
+                vector_insert(&operands, i_ptr, 1);
+                vector_insert(&offsets, i_ptr, 0);
+                i_ptr++;
+            }
             break;
         case '-':
-            vector_append(&instructions, DEC);
-            i_ptr++;
+            if (IS_LAST_INSTR(ADD)) {
+                operands.array[i_ptr - 1] -= 1;
+                if (operands.array[i_ptr - 1] == 0) {
+                    vector_pop(&instructions);
+                    vector_pop(&operands);
+                    vector_pop(&offsets);
+                    i_ptr--;
+                }
+            } else {
+                vector_insert(&instructions, i_ptr, ADD);
+                vector_insert(&operands, i_ptr, -1);
+                vector_insert(&offsets, i_ptr, 0);
+                i_ptr++;
+            }
             break;
         case ',':
-            vector_append(&instructions, IN);
+            vector_insert(&instructions, i_ptr, IN);
+            vector_insert(&operands, i_ptr, 0);
+            vector_insert(&offsets, i_ptr, 0);
             i_ptr++;
             break;
         case '.':
-            vector_append(&instructions, OUT);
+            vector_insert(&instructions, i_ptr, OUT);
+            vector_insert(&operands, i_ptr, 0);
+            vector_insert(&offsets, i_ptr, 0);
             i_ptr++;
             break;
         case '[':
-            vector_append(&instructions, J_FWD);
-            vector_append(&instructions, 0);
-            stack_push(&stack, &s_ptr, i_ptr);
-            i_ptr += 2;
+            vector_insert(&instructions, i_ptr, J_FWD);
+            vector_insert(&operands, i_ptr, 0);
+            vector_insert(&offsets, i_ptr, 0);
+            stack_push(&stack, i_ptr);
+            i_ptr++;
             break;
         case ']':
-            target = stack_pop(&stack, &s_ptr);
-            vector_append(&instructions, J_BACK);
-            vector_append(&instructions, target);
-            instructions.array[target + 1] = i_ptr;
-            i_ptr += 2;
+            target = stack_pop(&stack);
+            if (match_set()) {
+                vector_pop(&instructions);
+                vector_pop(&instructions);
+                vector_pop(&operands);
+                vector_pop(&operands);
+                vector_pop(&offsets);
+                vector_pop(&offsets);
+                vector_insert(&instructions, i_ptr - 2, SET);
+                vector_insert(&operands, i_ptr - 2, 0);
+                vector_insert(&offsets, i_ptr - 2, 0);
+                i_ptr--;
+            } else if (match_move_to_zero()) {
+                vector_pop(&instructions);
+                vector_pop(&instructions);
+                operand = vector_last(&operands);
+                vector_pop(&operands);
+                vector_pop(&operands);
+                vector_pop(&offsets);
+                vector_pop(&offsets);
+                vector_insert(&instructions, i_ptr - 2, MOVE_TO_0);
+                vector_insert(&operands, i_ptr - 2, operand);
+                vector_insert(&offsets, i_ptr - 2, 0);
+                i_ptr--;
+            } else if (match_multiply()) {
+                match_mult++;
+                operand = OPERAND_FROM_END(3);
+                vector_pop(&instructions);
+                vector_pop(&instructions);
+                vector_pop(&instructions);
+                vector_pop(&instructions);
+                vector_pop(&instructions);
+                vector_pop(&operands);
+                vector_pop(&operands);
+                vector_pop(&operands);
+                vector_pop(&operands);
+                vector_pop(&operands);
+                vector_pop(&offsets);
+                vector_pop(&offsets);
+                vector_pop(&offsets);
+                vector_pop(&offsets);
+                vector_pop(&offsets);
+                i_ptr -= 5;
+                vector_insert(&instructions, i_ptr, MEM_MOVE);
+                vector_insert(&operands, i_ptr, operand);
+                vector_insert(&offsets, i_ptr, 0);
+                i_ptr++;
+            } else {
+                vector_insert(&instructions, i_ptr, J_BACK);
+                vector_insert(&operands, i_ptr, target);
+                vector_insert(&offsets, i_ptr, 0);
+                operands.array[target] = i_ptr;
+                i_ptr++;
+            }
         }
     }
+
+    vector_append(&instructions, HALT);
+    vector_append(&operands, 0);
+    vector_append(&offsets, 0);
+
+    printf("match mult == %d\n", match_mult);
 
     return 0;
 }
 
-void interpret_bf() {
-    int i_ptr = 0;
-    int t_ptr = 8192 / 2;
-    int *tape = (int *)calloc(8192, sizeof(int));
-    while (i_ptr < instructions.count) {
-        switch (instructions.array[i_ptr]) {
-        case LEFT:
-            t_ptr++;
-            i_ptr++;
-            break;
-        case RIGHT:
-            t_ptr--;
-            i_ptr++;
-            break;
-        case INC:
-            tape[t_ptr]++;
-            i_ptr++;
-            break;
-        case DEC:
-            tape[t_ptr]--;
-            i_ptr++;
-            break;
-        case OUT:
-            putchar(tape[t_ptr]);
-            i_ptr++;
-            break;
-        case IN:
-            tape[t_ptr] = getchar();
-            i_ptr++;
-            break;
-        case J_FWD:
-            i_ptr = tape[t_ptr] ? i_ptr + 2 : instructions.array[i_ptr + 1];
-            break;
-        case J_BACK:
-            i_ptr = tape[t_ptr] ? instructions.array[i_ptr + 1] : i_ptr + 2;
-            break;
-        }
-    }
-}
-
 void interpret_bf_threaded() {
-    static void *dispatch_table[] = {&&do_left, &&do_right, &&do_inc,
-                                     &&do_dec,  &&do_out,   &&do_in,
-                                     &&do_fwd,  &&do_back};
+    static void *dispatch_table[] = {&&do_move, &&do_add, &&do_out,
+                                     &&do_in,   &&do_fwd, &&do_back,
+                                     &&do_halt, &&do_set, &&do_move_to_0, &&do_mem_move};
 #define DISPATCH() goto *dispatch_table[instructions.array[i_ptr]]
     int i_ptr = 0;
     int t_ptr = 8192 / 2;
-    int *tape = (int *)calloc(8192, sizeof(int));
+    uint8_t *tape = (uint8_t *)calloc(8192, sizeof(uint8_t));
+    // printf("start\n");
+    // getchar();
     DISPATCH();
     while (i_ptr < instructions.count) {
-    do_left:
-        t_ptr++;
+    do_move:
+        t_ptr += operands.array[i_ptr];
         i_ptr++;
+        // printf("left\n");
+        // getchar();
         DISPATCH();
-    do_right:
-        t_ptr--;
+    do_add:
+        tape[t_ptr + offsets.array[i_ptr]] += operands.array[i_ptr];
         i_ptr++;
-        DISPATCH();
-    do_inc:
-        tape[t_ptr]++;
-        i_ptr++;
-        DISPATCH();
-    do_dec:
-        tape[t_ptr]--;
-        i_ptr++;
+        // printf("add\n");
+        // getchar();
         DISPATCH();
     do_out:
         putchar(tape[t_ptr]);
         i_ptr++;
+        // printf("out\n");
+        // getchar();
         DISPATCH();
     do_in:
         tape[t_ptr] = getchar();
         i_ptr++;
+        // printf("in\n");
+        // getchar();
         DISPATCH();
     do_fwd:
-        i_ptr = tape[t_ptr] ? i_ptr + 2 : instructions.array[i_ptr + 1];
+        i_ptr = tape[t_ptr] ? i_ptr + 1 : operands.array[i_ptr];
+        // printf("fwd\n");
+        // getchar();
         DISPATCH();
     do_back:
-        i_ptr = tape[t_ptr] ? instructions.array[i_ptr + 1] : i_ptr + 2;
+        i_ptr = tape[t_ptr] ? operands.array[i_ptr] : i_ptr + 1;
+        // printf("back\n");
+        // getchar();
         DISPATCH();
+    do_set:
+        tape[t_ptr] = operands.array[i_ptr];
+        i_ptr++;
+        // printf("set\n");
+        // getchar();
+        DISPATCH();
+    do_move_to_0:
+        while (tape[t_ptr]) {
+            t_ptr += operands.array[i_ptr];
+        }
+        i_ptr++;
+        // printf("move0\n");
+        // getchar();
+        DISPATCH();
+    do_mem_move:
+        if (tape[t_ptr]) {
+            int move_to_ptr = t_ptr + operands.array[i_ptr];
+            tape[move_to_ptr] += tape[t_ptr];
+            tape[t_ptr] = 0;
+        }
+        i_ptr++;
+        DISPATCH();
+    do_halt:
+        break;
     }
 }
 
 int main(int argc, char *argv[]) {
     vector_init(&instructions);
+    vector_init(&operands);
+    vector_init(&offsets);
     vector_init(&stack);
-    int ret;
+
     if (argc != 2) {
         fprintf(stderr, "Usage: bf <file>");
         return 1;
@@ -203,10 +380,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    ret = compile_bf(fp);
-    interpret_bf_threaded();
+    compile_bf(fp);
+    // dis_bf();
+
+    // interpret_bf_threaded();
 
     vector_free(&instructions);
+    vector_free(&operands);
+    vector_free(&offsets);
     vector_free(&stack);
 
     fclose(fp);
