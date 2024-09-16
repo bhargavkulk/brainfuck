@@ -1,4 +1,4 @@
-FLAGS:= -Wall -Wextra -Iinclude -O3
+FLAGS:= -Wall -Wextra -Iinclude -Ofast
 
 SRC:= $(wildcard src/*.c)
 HDR:= $(wildcard include/*.h)

@@ -293,8 +293,8 @@ void interpret_bf_threaded() {
                                      &&do_halt, &&do_set, &&do_move_to_0, &&do_mem_move};
 #define DISPATCH() goto *dispatch_table[instructions.array[i_ptr]]
     int i_ptr = 0;
-    int t_ptr = 8192 / 2;
-    uint8_t *tape = (uint8_t *)calloc(8192, sizeof(uint8_t));
+    int t_ptr = 60000 / 2;
+    uint8_t *tape = (uint8_t *)calloc(60000, sizeof(uint8_t));
     // printf("start\n");
     // getchar();
     DISPATCH();
